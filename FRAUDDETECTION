@@ -1,0 +1,85 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import classification_report, accuracy_score
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
+
+# Load the dataset using pandas
+data = pd.read_csv(r'C:\Users\yagom\OneDrive\デスクトップ\AI PROJECT\creditcard.csv')  # Updated file path
+
+# Dataset exploration
+print(data.columns)
+
+# Sample 10% of the dataset for quick processing
+data = data.sample(frac=0.1, random_state=1)
+print(data.shape)
+print(data.describe())
+
+# V1 - V28 are the results of PCA dimensionality reduction
+# Plot histograms of each parameter
+data.hist(figsize=(20, 20))
+plt.show()
+
+# Determine the number of fraud cases in the dataset
+Fraud = data[data['Class'] == 1]
+Valid = data[data['Class'] == 0]
+
+outlier_fraction = len(Fraud) / float(len(Valid))
+print(f"Outlier Fraction: {outlier_fraction}")
+print(f"Fraud Cases: {len(Fraud)}")
+print(f"Valid Transactions: {len(Valid)}")
+
+# Correlation matrix
+corrmat = data.corr()
+plt.figure(figsize=(12, 9))
+sns.heatmap(corrmat, vmax=.8, square=True)
+plt.show()
+
+# Prepare the data
+columns = data.columns.tolist()
+columns = [c for c in columns if c not in ["Class"]]  # Exclude the target column
+target = "Class"
+
+X = data[columns]
+Y = data[target]
+
+# Print shapes of the feature set and target
+print(f"Feature set shape: {X.shape}")
+print(f"Target shape: {Y.shape}")
+
+# Define random states
+state = 1
+
+# Define outlier detection tools
+classifiers = {
+    "Isolation Forest": IsolationForest(max_samples=len(X),
+                                        contamination=outlier_fraction,
+                                        random_state=state),
+    "Local Outlier Factor": LocalOutlierFactor(
+        n_neighbors=20,
+        contamination=outlier_fraction)
+}
+
+# Apply models and evaluate
+plt.figure(figsize=(9, 7))
+n_outliers = len(Fraud)
+
+for clf_name, clf in classifiers.items():
+    if clf_name == "Local Outlier Factor":
+        y_pred = clf.fit_predict(X)
+        scores_pred = clf.negative_outlier_factor_
+    else:
+        clf.fit(X)
+        scores_pred = clf.decision_function(X)
+        y_pred = clf.predict(X)
+
+    # Reshape the prediction values: 0 for valid, 1 for fraud
+    y_pred = [0 if pred == 1 else 1 for pred in y_pred]
+
+    n_errors = (y_pred != Y).sum()
+
+    # Run classification metrics
+    print(f"{clf_name}: {n_errors} errors")
+    print(f"Accuracy Score: {accuracy_score(Y, y_pred)}")
+    print(f"Classification Report:\n{classification_report(Y, y_pred)}")
